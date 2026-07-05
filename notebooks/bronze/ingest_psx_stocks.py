@@ -1,4 +1,4 @@
-﻿# Databricks notebook source
+# Databricks notebook source
 
 # COMMAND ----------
 
@@ -31,7 +31,7 @@
 
 # Install yfinance — Yahoo Finance API wrapper (free, no API key required)
 # yfinance is not pre-installed on Databricks, so we install it at notebook startup
-%pip install yfinance==0.2.36 --quiet
+%pip install yfinance --upgrade --quiet
 
 # COMMAND ----------
 
@@ -63,7 +63,7 @@ spark = SparkSession.builder.getOrCreate()
 # Notebook-level configuration
 # WHY: Centralizing config here makes it easy to parameterize via ADF pipeline later
 # ADF will pass these as notebook parameters when orchestrating
-CATALOG_NAME    = "de_project_catalog"   # Unity Catalog catalog name
+CATALOG_NAME    = "azure_de_project_ws"       # Unity Catalog catalog name
 SCHEMA_NAME     = "bronze"               # Medallion layer schema
 TABLE_NAME      = "raw_psx_stocks"       # Full table: de_project_catalog.bronze.raw_psx_stocks
 FULL_TABLE_PATH = f"{CATALOG_NAME}.{SCHEMA_NAME}.{TABLE_NAME}"
@@ -272,6 +272,12 @@ def add_bronze_metadata(sdf, source: str, batch_id: str):
     """
     return (
         sdf
+        .withColumn("date", F.to_date(F.col("date"))) # FIX: Cast yfinance timestamp to DateType
+        .withColumn("open", F.col("open").cast(DoubleType()))
+        .withColumn("high", F.col("high").cast(DoubleType()))
+        .withColumn("low", F.col("low").cast(DoubleType()))
+        .withColumn("close", F.col("close").cast(DoubleType()))
+        .withColumn("volume", F.col("volume").cast(LongType())) # FIX: Cast volume to LongType
         .withColumn("_ingest_timestamp", F.current_timestamp())
         .withColumn("_source",           F.lit(source))
         .withColumn("_batch_id",         F.lit(batch_id))
@@ -314,9 +320,8 @@ bronze_sdf.printSchema()
 
 # First, create the catalog and schema if they don't exist
 # On first run this is needed; subsequent runs will skip these DDL statements
-spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG_NAME}")
-spark.sql(f"USE CATALOG {CATALOG_NAME}")
-spark.sql(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA_NAME}")
+# We don't need to CREATE CATALOG for hive_metastore, just the schema/database
+spark.sql(f"CREATE DATABASE IF NOT EXISTS {CATALOG_NAME}.{SCHEMA_NAME}")
 
 # Create the Bronze Delta table with explicit schema
 spark.sql(f"""

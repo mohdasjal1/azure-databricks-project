@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
@@ -10,6 +10,8 @@ venv/
 # Databricks
 .databricks/
 *.dbc
+.databrickscfg        # Databricks CLI auth config — contains token, NEVER commit this
+
 
 # Secrets - NEVER commit these
 *.pem
