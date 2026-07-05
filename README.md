@@ -1,4 +1,4 @@
-﻿# Azure Data Engineering Pipeline
+# Azure Data Engineering Pipeline: PSX Stock Analysis
 
 > End-to-end data engineering portfolio project built on Azure + Databricks + Delta Lake.
 > Architecture: Medallion (Bronze -> Silver -> Gold) | Governance: Unity Catalog | Orchestration: ADF
@@ -11,27 +11,43 @@
 ![Databricks](https://img.shields.io/badge/Databricks-FF3621?style=flat&logo=databricks&logoColor=white)
 ![Delta Lake](https://img.shields.io/badge/Delta%20Lake-00ADD8?style=flat&logo=databricks&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
-![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-2088FF?style=flat&logo=githubactions&logoColor=white)
 
 | Component | Technology |
 |-----------|-----------|
 | Cloud | Azure |
 | Processing | Databricks (PySpark) |
 | Storage | ADLS Gen2 + Delta Lake |
-| Orchestration | Azure Data Factory |
-| Governance | Unity Catalog |
-| CI/CD | GitHub Actions |
+| Orchestration | Azure Data Factory (ADF) |
+| Governance | Unity Catalog / Hive Metastore |
 
 ---
 
-## Architecture
+## Dataset
+**Pakistan Stock Exchange (PSX) KSE-100 Index**
+- We ingested 5 years of daily historical stock data (Open, High, Low, Close, Volume) for blue-chip companies in Pakistan.
+- Data is dynamically fetched using the `yfinance` Python library API.
 
-See [docs/architecture.md](docs/architecture.md) for the full architecture diagram and decision rationale.
+---
 
-**Medallion Layers:**
-- **Bronze** — Raw ingestion, append-only Delta tables with metadata columns
-- **Silver** — Cleaned, typed, deduplicated data with schema enforcement
-- **Gold** — Aggregated KPIs and business metrics ready for analytics
+## Architecture (Medallion)
+
+**1. Bronze Layer (Ingestion)**
+- Dynamically fetches raw JSON/CSV data from the API.
+- Enforces strict Delta schema constraints (`mergeSchema=false`).
+- Appends data with audit columns (`_ingest_timestamp`, `_batch_id`).
+
+**2. Silver Layer (Transformation)**
+- Deduplicates raw records using PySpark Window functions to ensure idempotency.
+- Calculates daily percentage returns and price volatility.
+- Flags anomalies (e.g., trading days with 0 volume or >15% extreme price swings).
+- Merges (`UPSERT`) cleaned data into the Silver Delta table.
+
+**3. Gold Layer (Business KPIs)**
+- Aggregates the clean Silver data into business-ready tables for Business Intelligence dashboards:
+  - `agg_psx_daily_returns`: Fact table for time-series plotting.
+  - `agg_psx_52week_high_low`: Calculates rolling 365-day highs and lows.
+  - `agg_psx_sector_performance`: Monthly grouped aggregation to rank sector strength.
+  - `agg_psx_volatility_index`: Rolling 30-day standard deviation to gauge stock risk.
 
 ---
 
@@ -40,34 +56,28 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture diagr
 ```
 azure-de-project/
 +-- notebooks/
-|   +-- bronze/      <- Raw ingestion notebooks
-|   +-- silver/      <- Transformation notebooks
-|   +-- gold/        <- Aggregation / KPI notebooks
-+-- adf_pipelines/   <- ADF pipeline JSON exports
-+-- unity_catalog/   <- Unity Catalog setup scripts
-+-- ci_cd/
-|   +-- .github/
-|       +-- workflows/ <- GitHub Actions pipelines
-+-- docs/
-|   +-- architecture.md
+|   +-- bronze/      <- Ingests PSX data from yfinance
+|   +-- silver/      <- Cleans, deduplicates, and UPSERTS data
+|   +-- gold/        <- Creates aggregated KPI tables
 +-- README.md
 ```
 
 ---
 
-## Dataset
+## How to Run the Pipeline
 
-> To be updated after dataset selection.
-
----
-
-## How to Run
-
-> Setup instructions will be added as the project is built.
+1. **Setup Databricks**: Ensure you have an Azure Databricks workspace and an interactive cluster running.
+2. **Import Notebooks**: Upload the `notebooks/` directory to your Databricks workspace.
+3. **Azure Data Factory**: 
+   - Create an Azure Data Factory instance.
+   - Create a Linked Service to your Databricks cluster using a Personal Access Token.
+   - Create a Pipeline with 3 **Databricks Notebook Activities** linked sequentially:
+     `Bronze_Ingest` ➔ `Silver_Transform` ➔ `Gold_Aggregate`
+4. **Trigger**: Click "Trigger Now" in Azure Data Factory to watch the pipeline execute end-to-end!
 
 ---
 
 ## Author
 
-Data Engineering Bootcamp Student — Karachi, Pakistan
-Building production-grade portfolio projects with Azure + Databricks.
+**Data Engineering Bootcamp Student** — Karachi, Pakistan
+*Building production-grade portfolio projects with Azure + Databricks.*
