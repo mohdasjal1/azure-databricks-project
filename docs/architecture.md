@@ -1,53 +1,50 @@
-﻿# Azure Data Engineering Project — Architecture
+# Pipeline Architecture
 
-## Overview
+```mermaid
+graph TD
+    %% Styling
+    classDef azure fill:#0078D4,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef databricks fill:#FF3621,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef api fill:#3776AB,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef storage fill:#00ADD8,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef bi fill:#F2C811,stroke:#fff,stroke-width:2px,color:#000;
 
-End-to-end data engineering pipeline built on Azure + Databricks using the Medallion Architecture
-(Bronze -> Silver -> Gold). Demonstrates production-grade data engineering skills including
-ingestion, transformation, orchestration, governance, and CI/CD.
+    %% Components
+    API["🌐 Yahoo Finance API<br/>(External Source)"]:::api
+    ADF["⚙️ Azure Data Factory<br/>(Pipeline Orchestration)"]:::azure
+    UC["🛡️ Unity Catalog<br/>(Data Governance & Metastore)"]:::databricks
 
----
+    subgraph ADLS ["Azure Data Lake Storage Gen2 (Delta Lake)"]
+        Bronze[("🥉 Bronze Layer<br/>(Raw Append-Only)")]:::storage
+        Silver[("🥈 Silver Layer<br/>(Cleaned & UPSERT)")]:::storage
+        Gold[("🥇 Gold Layer<br/>(Aggregated KPIs)")]:::storage
+    end
 
-## Technology Stack
+    subgraph Databricks ["Azure Databricks (Compute)"]
+        NB1["📓 ingest_psx_stocks.py"]:::databricks
+        NB2["📓 transform_psx_stocks.py"]:::databricks
+        NB3["📓 aggregate_psx_kpis.py"]:::databricks
+    end
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| Cloud Platform | Azure | Hosting all infrastructure |
-| Processing Engine | Databricks (Free Edition) | PySpark-based transformations |
-| Orchestration | Azure Data Factory | Pipeline scheduling and triggering |
-| Storage | ADLS Gen2 + Delta Lake | Medallion architecture storage |
-| Governance | Unity Catalog | Schema enforcement, lineage, RBAC |
-| CI/CD | GitHub Actions | Notebook + ADF deployment automation |
-| Secret Management | Azure Key Vault | No secrets in code, ever |
+    PBI["📊 Power BI / Tableau<br/>(Business Dashboards)"]:::bi
 
----
+    %% Flow
+    ADF -.->|Triggers Schedule| NB1
+    ADF -.->|On Success| NB2
+    ADF -.->|On Success| NB3
 
-## Medallion Layer Definitions
+    API -->|JSON/CSV Data| NB1
+    NB1 -->|Write Raw| Bronze
+    
+    Bronze -->|Read Incremental| NB2
+    NB2 -->|MERGE / Deduplicate| Silver
 
-### Bronze - Raw Ingestion
-- Raw data as-is from source + metadata columns (_ingest_timestamp, _source_file, _batch_id)
-- Write mode: Append-only | Format: Delta Lake
+    Silver -->|Read Clean| NB3
+    NB3 -->|Window Aggregations| Gold
 
-### Silver - Clean and Validated
-- Type casting, null handling, deduplication, string normalization
-- Write mode: UPSERT on primary key | Format: Delta Lake
-
-### Gold - Business Ready
-- Aggregated KPIs, star schema, business metrics
-- Write mode: Overwrite or incremental | Format: Delta Lake
-
----
-
-## Unity Catalog Structure
-
+    Gold -->|Direct Query| PBI
+    
+    UC -.- Bronze
+    UC -.- Silver
+    UC -.- Gold
 ```
-Catalog: de_project_catalog
-+-- Schema: bronze  ->  raw_<domain>_<entity>
-+-- Schema: silver  ->  clean_<domain>_<entity>
-+-- Schema: gold    ->  agg_<domain>_<kpi>
-```
-
----
-
-## Dataset
-> To be filled after dataset selection in Session 1
